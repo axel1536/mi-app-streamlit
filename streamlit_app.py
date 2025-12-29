@@ -78,15 +78,79 @@ df_avance = pd.DataFrame(datos.get("avance", []))
 
 # ====== INTERFAZ PRINCIPAL ======
 st.title(f"Obra: {OBRAS[obra_actual]}")
-if st.session_state["auth"] == "jefe":
-    st.sidebar.success("MODO JEFE – Acceso total")
-else:
-    st.sidebar.info("MODO PASANTE – Solo parte diario de hoy")
 
-# Parte diario
+# === 1. CONFIGURACIÓN (solo jefe) ===
+if st.session_state["auth"] == "jefe":
+    with st.expander("⚙️ Configuración de Obra (Presupuesto, Cronograma, Rendimientos)", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            presupuesto = st.number_input("Presupuesto Total de Obra (S/)", min_value=0.0, value=float(datos.get("presupuesto_total", 0)))
+            datos["presupuesto_total"] = presupuesto
+        with col2:
+            st.write("**Rendimientos de Personal (unidad/día)**")
+            rendimientos = datos.get("rendimientos", {})
+            labores = st.text_input("Nueva labor (ej: Carpintero)", "")
+            if labores and st.button("Agregar labor"):
+                if labores not in rendimientos:
+                    rendimientos[labores] = 0
+            for labor in list(rendimientos):
+                rendimientos[labor] = st.number_input(f"{labor} (unidad/día)", min_value=0.0, value=float(rendimientos[labor]), key=f"rend_{labor}")
+            datos["rendimientos"] = rendimientos
+
+        st.write("**Cronograma Valorizado (Avance planificado % por fecha)**")
+        nueva_fecha = st.date_input("Fecha planificada")
+        nuevo_avance_plan = st.number_input("Avance planificado acumulado (%)", 0.0, 100.0, step=1.0)
+        if st.button("Agregar al cronograma"):
+            datos["cronograma"].append({"fecha": str(nueva_fecha), "avance_plan": nuevo_avance_plan})
+            datos["cronograma"] = sorted(datos["cronograma"], key=lambda x: x["fecha"])
+            st.success("Agregado al cronograma")
+        
+        if st.button("💾 Guardar Configuración"):
+            guardar(obra_actual, datos)
+            st.success("Configuración guardada")
+            st.rerun()
+
+# === 2. SEMÁFORO DE ALERTA ===
+if datos["presupuesto_total"] > 0 or datos["cronograma"]:
+    st.header("🚦 Semáforo de Alerta")
+    col1, col2 = st.columns(2)
+    
+    # Avance real acumulado
+    avance_real = sum(item["avance"] for item in datos["avance"]) if datos["avance"] else 0
+    
+    with col1:
+        if datos["cronograma"]:
+            hoy_str = str(date.today())
+            plan_hoy = next((item["avance_plan"] for item in reversed(datos["cronograma"]) if item["fecha"] <= hoy_str), 0)
+            desviacion_avance = avance_real - plan_hoy
+            st.metric("Avance Real vs Planificado", f"{avance_real:.1f}%", f"{desviacion_avance:+.1f}%")
+            
+            if desviacion_avance >= -5:
+                color = "🟢 Verde"
+            elif desviacion_avance >= -10:
+                color = "🟡 Ámbar"
+            else:
+                color = "🔴 Rojo"
+            st.markdown(f"**Estado avance: {color}**")
+    
+    with col2:
+        if datos["presupuesto_total"] > 0:
+            gasto_estimado = datos["presupuesto_total"] * (avance_real / 100) if avance_real > 0 else 0
+            desviacion_pres = ((gasto_estimado / datos["presupuesto_total"]) * 100) - avance_real
+            st.metric("Desviación Presupuestal", f"{desviacion_pres:+.1f}%")
+            
+            if desviacion_pres <= 5:
+                color_p = "🟢 Verde (cómodo)"
+            elif desviacion_pres <= 10:
+                color_p = "🟡 Ámbar (precaución)"
+            else:
+                color_p = "🔴 Rojo (pérdida)"
+            st.markdown(f"**Estado presupuesto: {color_p}**")
+
+# === 3. Parte Diario (igual que antes) ===
 st.header("Parte Diario del Día")
 hoy = date.today()
-responsable = st.text_input("Tu nombre", value=st.session_state.get("user", ""))
+responsable = st.text_input("Tu nombre", value=st.session_state["user"])
 avance = st.slider("Avance logrado hoy (%)", 0, 30, 5)
 obs = st.text_area("Observaciones")
 fotos = st.file_uploader("Fotos del avance (mínimo 3)", accept_multiple_files=True, type=["jpg","png","jpeg"])
@@ -97,48 +161,40 @@ if st.button("ENVIAR PARTE DIARIO", type="primary"):
     else:
         rutas_fotos = []
         for f in fotos:
-            # Usar un timestamp para evitar nombres de archivo duplicados
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             ruta = f"obras/fotos/{obra_actual}{hoy}{timestamp}_{f.name}"
             with open(ruta, "wb") as file:
                 file.write(f.getbuffer())
             rutas_fotos.append(ruta)
-        
         nuevo_avance = {
-            "fecha": str(hoy), 
-            "responsable": responsable, 
-            "avance": avance, 
-            "obs": obs, 
-            "fotos": rutas_fotos # <-- MEJORA: Guardar las rutas completas
+            "fecha": str(hoy),
+            "responsable": responsable,
+            "avance": avance,
+            "obs": obs,
+            "fotos": rutas_fotos
         }
         datos["avance"].append(nuevo_avance)
         guardar(obra_actual, datos)
         st.success("¡Parte enviado correctamente!")
         st.balloons()
-        st.rerun() # <-- MEJORA: Recargar la página para limpiar el formulario
+        st.rerun()
 
-# Mostrar historial de avances
+# === 4. Historial ===
 st.header("Historial de Avances")
-# <-- MEJORA: Comprobación más explícita de DataFrame vacío
 if not df_avance.empty:
-    # Convertir la columna de fecha a datetime para ordenar
     df_avance['fecha'] = pd.to_datetime(df_avance['fecha'])
     df_avance = df_avance.sort_values(by='fecha', ascending=False)
-
+    avance_acumulado = 0
     for index, row in df_avance.iterrows():
-        with st.expander(f"Avance del {row['fecha'].strftime('%d/%m/%Y')} - Responsable: {row['responsable']} ({row['avance']}%)"):
+        avance_acumulado += row['avance']
+        with st.expander(f"{row['fecha'].strftime('%d/%m/%Y')} - {row['responsable']} (+{row['avance']}%) → Acumulado: {avance_acumulado:.1f}%"):
             st.write(f"*Observaciones:* {row['obs']}")
-            # <-- MEJORA: Mostrar las fotos si existen
             if 'fotos' in row and row['fotos']:
-                st.write("*Fotos del avance:*")
-                # Mostrar hasta 3 fotos en una columna
+                st.write("*Fotos:*")
                 cols = st.columns(min(len(row['fotos']), 3))
-                for i, foto_path in enumerate(row['fotos']):
+                for i, foto_path in enumerate(row['fotos'][:3]):
                     if os.path.exists(foto_path):
-                        with cols[i % 3]:
-                            st.image(foto_path, caption=foto_path.split('/')[-1], use_column_width=True)
-                    else:
-                        with cols[i % 3]:
-                            st.warning(f"No se encontró la imagen: {foto_path}")
+                        with cols[i]:
+                            st.image(foto_path, use_column_width=True)
 else:
-    st.info("No hay partes diarios registrados para esta obra aún.")
+    st.info("No hay partes diarios aún.")
