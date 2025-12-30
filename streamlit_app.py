@@ -13,7 +13,8 @@ for folder in ["obras", "obras/fotos"]:
 
 # Presupuesto fijo
 PRESUPUESTOS = {
-    "rinconada": 0,
+    #monto aplica para los dos
+    "rinconada": 99524,
     "pachacutec": 99524
 }
 
@@ -38,7 +39,7 @@ def check_password():
             st.session_state["auth"] = False
 
     if "auth" not in st.session_state:
-        st.title("🔐 ARQ. SUPERVISOR 2025")
+        st.title("ARQ. SUPERVISOR 2025")
         st.text_input("Usuario", key="user")
         st.text_input("Contraseña", type="password", key="password")
         st.button("INGRESAR", on_click=password_entered)
@@ -104,13 +105,13 @@ presupuesto = PRESUPUESTOS[obra_actual]
 porcentaje = (gasto_acumulado / presupuesto * 100) if presupuesto > 0 else 0
 
 # ====== SEMÁFORO DESTACADO ======
-st.title(f"🏗️ Obra: {OBRAS[obra_actual]}")
+st.title(f" Obra: {OBRAS[obra_actual]}")
 
 # Fondo con contrato (opcional - si quieres quitarlo, comenta la línea)
 # st.image("https://i.imgur.com/EXAMPLE.jpg", use_column_width=True, caption="Contrato de Obra - Suma Alzada")  # Sube tu imagen a imgur y pon el link
 
 st.markdown("---")
-st.markdown("<h1 style='text-align: center;'>🚦 SEMÁFORO DE PRESUPUESTO (CONTROL DE RENTABILIDAD)</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'> SEMÁFORO DE PRESUPUESTO (CONTROL DE RENTABILIDAD)</h1>", unsafe_allow_html=True)
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -125,15 +126,15 @@ with col4:
 # Semáforo grande con color real
 if porcentaje <= 95:
     color = "#00FF00"  # Verde
-    estado = "🟢 VERDE"
+    estado = "Bueno"
     mensaje = "Ejecución dentro del rango esperado. ¡Todo en orden!"
 elif porcentaje <= 100:
     color = "#FFFF00"  # Ámbar
-    estado = "🟡 ÁMBAR"
+    estado = "Cuidado"
     mensaje = "Alerta preventiva: se recomienda tomar acciones de control."
 else:
     color = "#FF0000"  # Rojo
-    estado = "🔴 ROJO"
+    estado = "Peligro"
     mensaje = "¡Sobrepaso del presupuesto! Riesgo de pérdida. Acciones correctivas urgentes."
 
 st.markdown(f"""
@@ -152,7 +153,7 @@ st.info(f"**Fecha actual:** {date.today().strftime('%d/%m/%Y')}")
 nombre_guardado = st.session_state.get("username", "")
 responsable = st.text_input("Tu nombre", value=nombre_guardado, disabled=False)
 
-st.subheader("💰 Gastos del día")
+st.subheader(" Gastos del día")
 gastos_dia = {}
 total_dia = 0.0
 for cat in CATEGORIAS_GASTOS:
@@ -171,7 +172,7 @@ avance = st.slider("Avance logrado hoy (%)", 0, 30, 5)
 obs = st.text_area("Observaciones")
 fotos = st.file_uploader("📸 Fotos del avance (mínimo 3 para pasantes)", accept_multiple_files=True, type=["jpg","png","jpeg"])
 
-if st.button("✅ ENVIAR PARTE DIARIO", type="primary", use_container_width=True):
+if st.button(" ENVIAR PARTE DIARIO", type="primary", use_container_width=True):
     if "pasante" in st.session_state["auth"] and len(fotos) < 3:
         st.error("¡Pasante: debes subir mínimo 3 fotos!")
     else:
@@ -205,7 +206,7 @@ if st.button("✅ ENVIAR PARTE DIARIO", type="primary", use_container_width=True
         st.rerun()
 
 # ====== HISTORIAL ======
-st.header("📜 Historial de Avances")
+st.header(" 📜 Historial de Avances")
 df_avance = pd.DataFrame(datos.get("avance", []))
 if not df_avance.empty:
     df_avance['fecha'] = pd.to_datetime(df_avance['fecha'])
@@ -224,5 +225,6 @@ if not df_avance.empty:
                             st.image(foto, use_column_width=True)
 else:
     st.info("Aún no hay registros para esta obra.")
+
 
 
